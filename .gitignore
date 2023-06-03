@@ -4,3 +4,9 @@ __pycache__/
 *.wav
 *.mp3
 
+.venv
+temp_outputs
+nemo_experiments
+segments_dir
+vocal_model_data
+conf/

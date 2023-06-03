@@ -18,6 +18,7 @@ import re
 import logging
 import subprocess
 import shlex
+from yaspin import yaspin
 from pydub import AudioSegment
 
 from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
@@ -442,29 +443,35 @@ if os.path.exists(checkpoint):
     info = pickle.load(open(os.path.join(temp_path, "whisper_info.pkl"), "rb"))
 
 else:
-    print("Running whisper")
     # Run on GPU with FP16
-    whisper_model = WhisperModel(whisper_model_name, device="cuda", compute_type="float16")
+    with yaspin(text="Transcribing audio", timer=True) as sp:
+        sp.write("> Loading whisper model")
+        whisper_model = WhisperModel(whisper_model_name, device="cuda", compute_type="float16")
 
-    # or run on GPU with INT8
-    # model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
-    # or run on CPU with INT8
-    # model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        sp.write("> Initializing trascription")
+        segments, info = whisper_model.transcribe(
+            vocal_target, beam_size=1, word_timestamps=True
+        )
 
-    segments, info = whisper_model.transcribe(
-        vocal_target, beam_size=1, word_timestamps=True
-    )
-    whisper_results = []
-    for segment in segments:
-        whisper_results.append(segment._asdict())
+        whisper_results = []
 
-    # save results
-    pickle.dump(whisper_results, open(checkpoint, "wb"))
-    pickle.dump(info, open(os.path.join(temp_path, "whisper_info.pkl"), "wb"))
+        sp.write(f"> Total audio duration is {info.duration} seconds")
+        for segment in segments:
+            left = info.duration - segment.end
+            progress = (segment.end / info.duration) * 100
+            sp.text = f"Transcribing audio - {progress:.2f}%, elapsed"
+            whisper_results.append(segment._asdict())
 
-    # clear gpu vram
-    del whisper_model
-    torch.cuda.empty_cache()
+        # save results
+        sp.write("> Saving results")
+        pickle.dump(whisper_results, open(checkpoint, "wb"))
+        pickle.dump(info, open(os.path.join(temp_path, "whisper_info.pkl"), "wb"))
+
+        # clear gpu vram
+        sp.write("> Clearing GPU memory")
+        del whisper_model
+        torch.cuda.empty_cache()
+        sp.ok("✅")
 
 # %% [markdown]
 # ## Aligning the transcription with the original audio using Wav2Vec2
@@ -484,14 +491,18 @@ if os.path.exists(checkpoint):
     word_timestamps = pickle.load(open(checkpoint, "rb"))
 
 else:
+    print("Running wave2vec2")
     if info.language in wav2vec2_langs:
         device = "cuda"
         alignment_model, metadata = whisperx.load_align_model(
             language_code=info.language, device=device
         )
-        result_aligned = whisperx.align(
-            whisper_results, alignment_model, metadata, vocal_target, device
-        )
+
+        with yaspin(text="Aligning Sequences", timer=True) as sp:
+            result_aligned = whisperx.align(
+                whisper_results, alignment_model, metadata, vocal_target, device
+            )
+            sp.ok("✅")
         word_timestamps = result_aligned["word_segments"]
         # clear gpu vram
         del alignment_model
@@ -513,6 +524,7 @@ checkpoint = os.path.join(temp_path, "mono_file.wav")
 if os.path.exists(checkpoint):
     print(f"{checkpoint} mono file exists")
 else:
+    print(f"{checkpoint} mono file does not exist, converting to mono")
     signal, sample_rate = librosa.load(vocal_target, sr=None)
     soundfile.write(checkpoint, signal, sample_rate, "PCM_24")
 
@@ -528,7 +540,8 @@ if not os.path.exists(checkpoint):
     print(f"{checkpoint} rttm file does not exist, running diarization")
     # Initialize NeMo MSDD diarization model
     msdd_model = NeuralDiarizer(cfg=create_config(temp_path)).to("cuda")
-    msdd_model.diarize()
+    with yaspin(text="Diarizing audio", timer=True):
+        msdd_model.diarize()
 
     del msdd_model
     torch.cuda.empty_cache()
@@ -696,10 +709,11 @@ os.makedirs(vocal_model_data_path, exist_ok=True)
 
 # copy vocal_target to vocal_model_data
 filename = os.path.splitext(os.path.split(audio_path)[-1])[0]
-shutil.copyfile(
-    os.path.join(temp_path, "mono_file.wav"),
-    os.path.join(vocal_model_data_path, f"vocals_{filename}.wav"),
-)
+
+# shutil.copyfile(
+#     os.path.join(temp_path, "mono_file.wav"),
+#     os.path.join(vocal_model_data_path, f"vocals_{filename}.wav"),
+# )
 
 # copy the rttms
 shutil.copyfile(

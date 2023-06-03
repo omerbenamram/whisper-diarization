@@ -5,3 +5,5 @@ faster-whisper==0.5.1
 git+https://github.com/m-bain/whisperX.git@4cb167a225c0ebaea127fd6049abfaa3af9f8bb4
 git+https://github.com/facebookresearch/demucs#egg=demucs
 deepmultilingualpunctuation
+torch==2.1.0.dev20230519+cu121
+yaspin

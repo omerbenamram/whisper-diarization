@@ -52,6 +52,7 @@ parser.add_argument(
 parser.add_argument(
     "--num-speakers",
     dest="num_speakers",
+    type=int,
     default=-1,
     help="number of speakers in the audio, default is -1 which means the model will infer the number of speakers",
 )
@@ -400,8 +401,8 @@ os.makedirs(temp_path, exist_ok=True)
 checkpoint = os.path.join(temp_path, "htdemucs", os.path.splitext(os.path.split(audio_path)[-1])[0], "vocals.wav")
 
 if not os.path.exists(checkpoint):
-    print("Running demucs.sparate")
     if enable_stemming:
+        print("Running demucs.sparate")
         # Isolate vocals from the rest of the audio
 
         return_code = os.system(
@@ -416,6 +417,7 @@ if not os.path.exists(checkpoint):
         else:
             vocal_target = checkpoint
     else:
+        print("Stemming disabled - skipping demucs.sparate")
         vocal_target = audio_path
 else:
     print(f"Using existing demucs.sparate output from {checkpoint}")

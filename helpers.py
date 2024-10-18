@@ -1,9 +1,13 @@
+import json
+import logging
 import os
+import shutil
+
+import nltk
 import wget
 from omegaconf import OmegaConf
-import json
-import shutil
-import platform
+from whisperx.alignment import DEFAULT_ALIGN_MODELS_HF, DEFAULT_ALIGN_MODELS_TORCH
+from whisperx.utils import LANGUAGES, TO_LANGUAGE_CODE
 
 punct_model_langs = [
     "en",
@@ -19,38 +23,213 @@ punct_model_langs = [
     "sk",
     "sl",
 ]
-wav2vec2_langs = [
-    "en",
-    "fr",
-    "de",
-    "es",
-    "it",
-    "nl",
-    "pt",
-    "ja",
-    "zh",
-    "uk",
-    "pt",
-    "ar",
-    "ru",
-    "pl",
-    "hu",
-    "fi",
-    "fa",
-    "el",
-    "tr",
-]
+wav2vec2_langs = list(DEFAULT_ALIGN_MODELS_TORCH.keys()) + list(
+    DEFAULT_ALIGN_MODELS_HF.keys()
+)
+
+whisper_langs = sorted(LANGUAGES.keys()) + sorted(
+    [k.title() for k in TO_LANGUAGE_CODE.keys()]
+)
+
+langs_to_iso = {
+    "aa": "aar",
+    "ab": "abk",
+    "ae": "ave",
+    "af": "afr",
+    "ak": "aka",
+    "am": "amh",
+    "an": "arg",
+    "ar": "ara",
+    "as": "asm",
+    "av": "ava",
+    "ay": "aym",
+    "az": "aze",
+    "ba": "bak",
+    "be": "bel",
+    "bg": "bul",
+    "bh": "bih",
+    "bi": "bis",
+    "bm": "bam",
+    "bn": "ben",
+    "bo": "tib",
+    "br": "bre",
+    "bs": "bos",
+    "ca": "cat",
+    "ce": "che",
+    "ch": "cha",
+    "co": "cos",
+    "cr": "cre",
+    "cs": "cze",
+    "cu": "chu",
+    "cv": "chv",
+    "cy": "wel",
+    "da": "dan",
+    "de": "ger",
+    "dv": "div",
+    "dz": "dzo",
+    "ee": "ewe",
+    "el": "gre",
+    "en": "eng",
+    "eo": "epo",
+    "es": "spa",
+    "et": "est",
+    "eu": "baq",
+    "fa": "per",
+    "ff": "ful",
+    "fi": "fin",
+    "fj": "fij",
+    "fo": "fao",
+    "fr": "fre",
+    "fy": "fry",
+    "ga": "gle",
+    "gd": "gla",
+    "gl": "glg",
+    "gn": "grn",
+    "gu": "guj",
+    "gv": "glv",
+    "ha": "hau",
+    "he": "heb",
+    "hi": "hin",
+    "ho": "hmo",
+    "hr": "hrv",
+    "ht": "hat",
+    "hu": "hun",
+    "hy": "arm",
+    "hz": "her",
+    "ia": "ina",
+    "id": "ind",
+    "ie": "ile",
+    "ig": "ibo",
+    "ii": "iii",
+    "ik": "ipk",
+    "io": "ido",
+    "is": "ice",
+    "it": "ita",
+    "iu": "iku",
+    "ja": "jpn",
+    "jv": "jav",
+    "ka": "geo",
+    "kg": "kon",
+    "ki": "kik",
+    "kj": "kua",
+    "kk": "kaz",
+    "kl": "kal",
+    "km": "khm",
+    "kn": "kan",
+    "ko": "kor",
+    "kr": "kau",
+    "ks": "kas",
+    "ku": "kur",
+    "kv": "kom",
+    "kw": "cor",
+    "ky": "kir",
+    "la": "lat",
+    "lb": "ltz",
+    "lg": "lug",
+    "li": "lim",
+    "ln": "lin",
+    "lo": "lao",
+    "lt": "lit",
+    "lu": "lub",
+    "lv": "lav",
+    "mg": "mlg",
+    "mh": "mah",
+    "mi": "mao",
+    "mk": "mac",
+    "ml": "mal",
+    "mn": "mon",
+    "mr": "mar",
+    "ms": "may",
+    "mt": "mlt",
+    "my": "bur",
+    "na": "nau",
+    "nb": "nob",
+    "nd": "nde",
+    "ne": "nep",
+    "ng": "ndo",
+    "nl": "dut",
+    "nn": "nno",
+    "no": "nor",
+    "nr": "nbl",
+    "nv": "nav",
+    "ny": "nya",
+    "oc": "oci",
+    "oj": "oji",
+    "om": "orm",
+    "or": "ori",
+    "os": "oss",
+    "pa": "pan",
+    "pi": "pli",
+    "pl": "pol",
+    "ps": "pus",
+    "pt": "por",
+    "qu": "que",
+    "rm": "roh",
+    "rn": "run",
+    "ro": "rum",
+    "ru": "rus",
+    "rw": "kin",
+    "sa": "san",
+    "sc": "srd",
+    "sd": "snd",
+    "se": "sme",
+    "sg": "sag",
+    "si": "sin",
+    "sk": "slo",
+    "sl": "slv",
+    "sm": "smo",
+    "sn": "sna",
+    "so": "som",
+    "sq": "alb",
+    "sr": "srp",
+    "ss": "ssw",
+    "st": "sot",
+    "su": "sun",
+    "sv": "swe",
+    "sw": "swa",
+    "ta": "tam",
+    "te": "tel",
+    "tg": "tgk",
+    "th": "tha",
+    "ti": "tir",
+    "tk": "tuk",
+    "tl": "tgl",
+    "tn": "tsn",
+    "to": "ton",
+    "tr": "tur",
+    "ts": "tso",
+    "tt": "tat",
+    "tw": "twi",
+    "ty": "tah",
+    "ug": "uig",
+    "uk": "ukr",
+    "ur": "urd",
+    "uz": "uzb",
+    "ve": "ven",
+    "vi": "vie",
+    "vo": "vol",
+    "wa": "wln",
+    "wo": "wol",
+    "xh": "xho",
+    "yi": "yid",
+    "yo": "yor",
+    "za": "zha",
+    "zh": "chi",
+    "zu": "zul",
+}
 
 
 def create_config(output_dir):
-    DOMAIN_TYPE = "telephonic"  # Can be meeting or telephonic based on domain type of the audio file
+    DOMAIN_TYPE = "telephonic"  # Can be meeting, telephonic, or general based on domain type of the audio file
+    CONFIG_LOCAL_DIRECTORY = "nemo_msdd_configs"
     CONFIG_FILE_NAME = f"diar_infer_{DOMAIN_TYPE}.yaml"
-    CONFIG_URL = f"https://raw.githubusercontent.com/NVIDIA/NeMo/main/examples/speaker_tasks/diarization/conf/inference/{CONFIG_FILE_NAME}"
-    MODEL_CONFIG = os.path.join(output_dir, CONFIG_FILE_NAME)
-    if not os.path.exists(MODEL_CONFIG):
-        MODEL_CONFIG = wget.download(CONFIG_URL, output_dir)
+    MODEL_CONFIG_PATH = os.path.join(CONFIG_LOCAL_DIRECTORY, CONFIG_FILE_NAME)
+    if not os.path.exists(MODEL_CONFIG_PATH):
+        os.makedirs(CONFIG_LOCAL_DIRECTORY, exist_ok=True)
+        CONFIG_URL = f"https://raw.githubusercontent.com/NVIDIA/NeMo/main/examples/speaker_tasks/diarization/conf/inference/{CONFIG_FILE_NAME}"
+        MODEL_CONFIG_PATH = wget.download(CONFIG_URL, MODEL_CONFIG_PATH)
 
-    config = OmegaConf.load(MODEL_CONFIG)
+    config = OmegaConf.load(MODEL_CONFIG_PATH)
 
     data_dir = os.path.join(output_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -70,13 +249,7 @@ def create_config(output_dir):
 
     pretrained_vad = "vad_multilingual_marblenet"
     pretrained_speaker_model = "titanet_large"
-
-    # num_workers = 1 results in "pickle" errors from Nvidia's NeMo on Silicon M chips
-    if (platform.machine() == "arm64") or (platform.machine() == "aarch64"):
-        config.num_workers = 0
-    else:
-        config.num_workers = 1  # Workaround for multiprocessing hanging with ipython issue
-
+    config.num_workers = 0
     config.diarizer.manifest_filepath = os.path.join(data_dir, "input_manifest.json")
     config.diarizer.out_dir = (
         output_dir  # Directory to store intermediate files and prediction outputs
@@ -156,7 +329,7 @@ def get_last_word_idx_of_sentence(word_idx, word_list, max_words):
     )
     right_idx = word_idx
     while (
-        right_idx < len(word_list)
+        right_idx < len(word_list) - 1
         and right_idx - word_idx < max_words
         and not is_word_sentence_end(right_idx)
     ):
@@ -230,6 +403,7 @@ def get_realigned_ws_mapping_with_punctuation(
 
 
 def get_sentences_speaker_mapping(word_speaker_mapping, spk_ts):
+    sentence_checker = nltk.tokenize.PunktSentenceTokenizer().text_contains_sentbreak
     s, e, spk = spk_ts[0]
     prev_spk = spk
 
@@ -239,7 +413,7 @@ def get_sentences_speaker_mapping(word_speaker_mapping, spk_ts):
     for wrd_dict in word_speaker_mapping:
         wrd, spk = wrd_dict["word"], wrd_dict["speaker"]
         s, e = wrd_dict["start_time"], wrd_dict["end_time"]
-        if spk != prev_spk:
+        if spk != prev_spk or sentence_checker(snt["text"] + " " + wrd):
             snts.append(snt)
             snt = {
                 "speaker": f"Speaker {spk}",
@@ -257,10 +431,20 @@ def get_sentences_speaker_mapping(word_speaker_mapping, spk_ts):
 
 
 def get_speaker_aware_transcript(sentences_speaker_mapping, f):
+    previous_speaker = sentences_speaker_mapping[0]["speaker"]
+    f.write(f"{previous_speaker}: ")
+
     for sentence_dict in sentences_speaker_mapping:
-        sp = sentence_dict["speaker"]
-        text = sentence_dict["text"]
-        f.write(f"\n\n{sp}: {text}")
+        speaker = sentence_dict["speaker"]
+        sentence = sentence_dict["text"]
+
+        # If this speaker doesn't match the previous one, start a new paragraph
+        if speaker != previous_speaker:
+            f.write(f"\n\n{speaker}: ")
+            previous_speaker = speaker
+
+        # No matter what, write the current sentence
+        f.write(sentence + " ")
 
 
 def format_timestamp(
@@ -300,6 +484,68 @@ def write_srt(transcript, file):
         )
 
 
+def find_numeral_symbol_tokens(tokenizer):
+    numeral_symbol_tokens = [
+        -1,
+    ]
+    for token, token_id in tokenizer.get_vocab().items():
+        has_numeral_symbol = any(c in "0123456789%$£" for c in token)
+        if has_numeral_symbol:
+            numeral_symbol_tokens.append(token_id)
+    return numeral_symbol_tokens
+
+
+def _get_next_start_timestamp(word_timestamps, current_word_index, final_timestamp):
+    # if current word is the last word
+    if current_word_index == len(word_timestamps) - 1:
+        return word_timestamps[current_word_index]["start"]
+
+    next_word_index = current_word_index + 1
+    while current_word_index < len(word_timestamps) - 1:
+        if word_timestamps[next_word_index].get("start") is None:
+            # if next word doesn't have a start timestamp
+            # merge it with the current word and delete it
+            word_timestamps[current_word_index]["word"] += (
+                " " + word_timestamps[next_word_index]["word"]
+            )
+
+            word_timestamps[next_word_index]["word"] = None
+            next_word_index += 1
+            if next_word_index == len(word_timestamps):
+                return final_timestamp
+
+        else:
+            return word_timestamps[next_word_index]["start"]
+
+
+def filter_missing_timestamps(
+    word_timestamps, initial_timestamp=0, final_timestamp=None
+):
+    # handle the first and last word
+    if word_timestamps[0].get("start") is None:
+        word_timestamps[0]["start"] = (
+            initial_timestamp if initial_timestamp is not None else 0
+        )
+        word_timestamps[0]["end"] = _get_next_start_timestamp(
+            word_timestamps, 0, final_timestamp
+        )
+
+    result = [
+        word_timestamps[0],
+    ]
+
+    for i, ws in enumerate(word_timestamps[1:], start=1):
+        # if ws doesn't have a start and end
+        # use the previous end as start and next start as end
+        if ws.get("start") is None and ws.get("word") is not None:
+            ws["start"] = word_timestamps[i - 1]["end"]
+            ws["end"] = _get_next_start_timestamp(word_timestamps, i, final_timestamp)
+
+        if ws["word"] is not None:
+            result.append(ws)
+    return result
+
+
 def cleanup(path: str):
     """path could either be relative or absolute."""
     # check if file or directory exists
@@ -311,3 +557,23 @@ def cleanup(path: str):
         shutil.rmtree(path)
     else:
         raise ValueError("Path {} is not a file or dir.".format(path))
+
+
+def process_language_arg(language: str, model_name: str):
+    """
+    Process the language argument to make sure it's valid and convert language names to language codes.
+    """
+    if language is not None:
+        language = language.lower()
+        if language not in LANGUAGES:
+            if language in TO_LANGUAGE_CODE:
+                language = TO_LANGUAGE_CODE[language]
+            else:
+                raise ValueError(f"Unsupported language: {language}")
+
+        if model_name.endswith(".en") and language != "en":
+            raise ValueError(
+                f"{model_name} is an English-only model but choosen language is '{language}'"
+            )
+
+    return language

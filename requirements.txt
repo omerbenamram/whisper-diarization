@@ -1,8 +1,6 @@
 wget
-transformers>=4.26.1
-faster-whisper==0.5.1
-deepmultilingualpunctuation
-torch
+numpy<2.0.0
+huggingface-hub==0.23.2
 yaspin
 nemo_toolkit[asr]==2.0.0rc0
 git+https://github.com/m-bain/whisperX.git@78dcfaab51005aa703ee21375f81ed31bc248560
